@@ -1,0 +1,30 @@
+services:
+  # Development service with hot-reloading
+  dev:
+    build:
+      context: .
+      target: development
+    container_name: train-builder-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    stdin_open: true
+    tty: true
+
+  # Production service with nginx
+  prod:
+    build:
+      context: .
+      target: production
+    container_name: train-builder-prod
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: train-builder-network
