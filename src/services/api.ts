@@ -47,6 +47,31 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 export const api = {
+  // Network persistence APIs
+  initNetwork: async (name: string, regionId: string) => {
+    return fetchAPI<{ network: any; regionId: string }>(`/network/init`, {
+      method: 'POST',
+      body: JSON.stringify({ name, regionId }),
+    });
+  },
+
+  getNetwork: async (id: string) => {
+    return fetchAPI<any>(`/network/${id}`, { method: 'GET' });
+  },
+
+  addStationToNetwork: async (networkId: string, station: any) => {
+    return fetchAPI<{ station: any; budget: number }>(`/network/${networkId}/stations`, {
+      method: 'POST',
+      body: JSON.stringify(station),
+    });
+  },
+
+  addTrackToNetwork: async (networkId: string, track: any) => {
+    return fetchAPI<{ track: any; budget: number }>(`/network/${networkId}/tracks`, {
+      method: 'POST',
+      body: JSON.stringify(track),
+    });
+  },
   /**
    * Calculate distance between two points
    */

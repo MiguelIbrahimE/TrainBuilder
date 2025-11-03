@@ -3,6 +3,8 @@ import cors from 'cors';
 import compression from 'compression';
 import helmet from 'helmet';
 import computationRoutes from './routes/computation.routes';
+import networkRoutes from './routes/network.routes';
+import path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -50,6 +52,23 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/compute', computationRoutes);
+app.use('/api/network', networkRoutes);
+
+// Static tiles serving with CORS headers
+// Expect tiles to be available under a directory specified by TILE_DIR or default to ../tiles
+const tilesDir = process.env.TILE_DIR || path.join(__dirname, '..', 'tiles');
+
+// Custom middleware for tiles to set CORP headers
+app.use('/tiles', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+});
+
+app.use('/tiles', express.static(tilesDir, {
+  maxAge: '30d',
+  immutable: true,
+}));
 
 // 404 handler
 app.use((req, res) => {
@@ -81,6 +100,7 @@ app.listen(PORT, () => {
 Endpoints:
   GET  /health              - Health check
   POST /api/compute/*       - Computation APIs
+  GET  /tiles/{z}/{x}/{y}.png - Static map tiles (preloaded)
 
 Ready to handle requests!
   `);

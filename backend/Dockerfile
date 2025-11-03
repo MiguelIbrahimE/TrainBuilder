@@ -6,14 +6,14 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (use install in dev to avoid lockfile mismatch during local edits)
+RUN npm install
 
 # Copy application files
 COPY . .
 
 # Expose backend port
-EXPOSE 3001
+EXPOSE 3000
 
 # Start development server
 CMD ["npm", "run", "dev"]

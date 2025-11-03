@@ -1,0 +1,12 @@
+{
+  "id": "11cfe9e7-b7b8-4d6f-a92c-a3f2650f729e",
+  "name": "My Railway Network",
+  "budget": 1000000000,
+  "income": 0,
+  "expenses": 0,
+  "gameYear": 2024,
+  "gameMonth": 1,
+  "stations": [],
+  "tracks": [],
+  "crossovers": []
+}

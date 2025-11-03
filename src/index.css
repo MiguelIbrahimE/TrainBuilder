@@ -2,8 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Leaflet map styles */
-@import 'leaflet/dist/leaflet.css';
+/* Leaflet CSS is imported in MapView.tsx */
 
 html, body, #root {
   height: 100%;

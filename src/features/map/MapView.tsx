@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Polyline, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useGameStore } from '../../store/gameStore';
 import { TRACK_COLORS, STATION_COLORS } from '../../types';
 import type { Coordinates } from '../../types';
+import { BoundedTileLayer } from './BoundedTileLayer';
 
 // Fix Leaflet default marker icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -25,7 +26,7 @@ const createStationIcon = (type: string) => {
   });
 };
 
-// Component to set map bounds based on selected region
+// Component to set map bounds based on selected region - strict boundaries
 function MapBoundsController() {
   const map = useMap();
   const { selectedRegion } = useGameStore();
@@ -36,8 +37,21 @@ function MapBoundsController() {
         [selectedRegion.bounds[0][0], selectedRegion.bounds[0][1]],
         [selectedRegion.bounds[1][0], selectedRegion.bounds[1][1]]
       );
+      
+      // Set strict bounds - cannot pan outside the region
       map.setMaxBounds(bounds);
-      map.fitBounds(bounds);
+      map.setMinZoom(selectedRegion.zoom - 2);
+      map.setMaxZoom(14); // Limit max zoom to avoid loading too many tiles
+      
+      // Fit to bounds with padding
+      map.fitBounds(bounds, { padding: [20, 20] });
+      
+      // Prevent panning outside bounds
+      map.on('drag', () => {
+        if (!bounds.contains(map.getCenter())) {
+          map.panInsideBounds(bounds, { animate: false });
+        }
+      });
     }
   }, [map, selectedRegion]);
 
@@ -88,13 +102,17 @@ export function MapView() {
         className="h-full w-full"
         zoomControl={true}
         minZoom={selectedRegion.zoom - 2}
-        maxZoom={18}
+        maxZoom={14}
+        maxBounds={[
+          [selectedRegion.bounds[0][0], selectedRegion.bounds[0][1]],
+          [selectedRegion.bounds[1][0], selectedRegion.bounds[1][1]],
+        ]}
+        maxBoundsViscosity={1.0} // Strict - cannot pan outside
       >
-        {/* Clean tile layer without labels and minimal infrastructure */}
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
+        {/* Bounded tile layer - only loads tiles for selected region */}
+        <BoundedTileLayer
+          region={selectedRegion}
+          tileUrl={import.meta.env.VITE_TILE_URL || 'http://localhost:3000/tiles'}
         />
 
         {/* Set bounds controller */}

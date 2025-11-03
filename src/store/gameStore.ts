@@ -9,6 +9,7 @@ import type {
   Coordinates,
   MapRegion,
 } from '../types';
+import { api } from '../services/api';
 
 interface GameState {
   // Network data
@@ -29,20 +30,20 @@ interface GameState {
 
   // Actions
   setNetwork: (network: GameNetwork) => void;
-  setSelectedRegion: (region: MapRegion) => void;
+  setSelectedRegion: (region: MapRegion) => Promise<void>;
   setCurrentTool: (tool: Tool) => void;
   setToolSettings: (settings: Partial<ToolSettings>) => void;
   toggleToolMenu: () => void;
 
   // Station actions
-  addStation: (station: Station) => void;
+  addStation: (station: Station) => Promise<void>;
   removeStation: (id: string) => void;
   selectStation: (id: string | null) => void;
 
   // Track actions
   startDrawingTrack: (startNodeId: string, startPoint: Coordinates) => void;
   addTrackWaypoint: (point: Coordinates) => void;
-  finishDrawingTrack: (track: Track) => void;
+  finishDrawingTrack: (track: Track) => Promise<void>;
   cancelDrawingTrack: () => void;
   removeTrack: (id: string) => void;
   selectTrack: (id: string | null) => void;
@@ -102,7 +103,20 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   // Basic setters
   setNetwork: (network) => set({ network }),
-  setSelectedRegion: (region) => set({ selectedRegion: region, network: DEFAULT_NETWORK }),
+  setSelectedRegion: async (region) => {
+    // Set region and network immediately so map can render
+    const initialNetwork = { ...DEFAULT_NETWORK, id: crypto.randomUUID() };
+    set({ selectedRegion: region, network: initialNetwork });
+    
+    // Then try to initialize on backend (async, won't block rendering)
+    try {
+      const { network } = await api.initNetwork('My Railway Network', region.id);
+      set({ network }); // Update with backend network if successful
+    } catch (e) {
+      console.warn('Backend network initialization failed, using local network:', e);
+      // Keep using the initial network we already set
+    }
+  },
   setCurrentTool: (tool) => set({ currentTool: tool }),
   setToolSettings: (settings) =>
     set((state) => ({
@@ -111,16 +125,34 @@ export const useGameStore = create<GameState>((set, get) => ({
   toggleToolMenu: () => set((state) => ({ isToolMenuOpen: !state.isToolMenuOpen })),
 
   // Station actions
-  addStation: (station) =>
-    set((state) => {
-      if (!state.network) return state;
-      return {
+  addStation: async (station) => {
+    const state = get();
+    if (!state.network) return;
+    try {
+      const { station: saved, budget } = await api.addStationToNetwork(state.network.id, {
+        name: station.name,
+        location: station.location,
+        platforms: station.platforms,
+        stationType: station.stationType,
+        facilities: station.facilities,
+      });
+      set({
+        network: {
+          ...state.network,
+          budget,
+          stations: [...state.network.stations, saved],
+        },
+      });
+    } catch {
+      // If backend fails, add locally
+      set({
         network: {
           ...state.network,
           stations: [...state.network.stations, station],
         },
-      };
-    }),
+      });
+    }
+  },
 
   removeStation: (id) =>
     set((state) => {
@@ -157,10 +189,29 @@ export const useGameStore = create<GameState>((set, get) => ({
       trackDrawingPoints: [...state.trackDrawingPoints, point],
     })),
 
-  finishDrawingTrack: (track) =>
-    set((state) => {
-      if (!state.network) return state;
-      return {
+  finishDrawingTrack: async (track) => {
+    const state = get();
+    if (!state.network) return;
+    try {
+      const { track: saved, budget } = await api.addTrackToNetwork(state.network.id, {
+        trackType: track.trackType,
+        fromNodeId: track.fromNodeId,
+        toNodeId: track.toNodeId,
+        waypoints: track.waypoints,
+        isDoubleTrack: track.isDoubleTrack,
+      });
+      set({
+        network: {
+          ...state.network,
+          budget,
+          tracks: [...state.network.tracks, saved],
+        },
+        isDrawingTrack: false,
+        trackDrawingPoints: [],
+        trackStartNodeId: null,
+      });
+    } catch {
+      set({
         network: {
           ...state.network,
           tracks: [...state.network.tracks, track],
@@ -168,8 +219,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         isDrawingTrack: false,
         trackDrawingPoints: [],
         trackStartNodeId: null,
-      };
-    }),
+      });
+    }
+  },
 
   cancelDrawingTrack: () =>
     set({
