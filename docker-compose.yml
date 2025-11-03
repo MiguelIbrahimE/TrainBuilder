@@ -1,10 +1,29 @@
 services:
-  # Development service with hot-reloading
-  dev:
+  # Backend API (computation service)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: trainbuilder-backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - CORS_ORIGIN=http://localhost:5173
+    restart: unless-stopped
+
+  # Frontend Development
+  frontend-dev:
     build:
       context: .
+      dockerfile: Dockerfile
       target: development
-    container_name: train-builder-dev
+    container_name: trainbuilder-frontend-dev
     ports:
       - "5173:5173"
     volumes:
@@ -12,17 +31,25 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3000/api
+    depends_on:
+      - backend
     stdin_open: true
     tty: true
 
-  # Production service with nginx
-  prod:
+  # Frontend Production
+  frontend-prod:
     build:
       context: .
+      dockerfile: Dockerfile
       target: production
-    container_name: train-builder-prod
+    container_name: trainbuilder-frontend-prod
     ports:
       - "8080:80"
+    environment:
+      - VITE_API_URL=http://backend:3000/api
+    depends_on:
+      - backend
     restart: unless-stopped
 
 networks:

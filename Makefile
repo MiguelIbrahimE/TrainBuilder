@@ -1,46 +1,55 @@
-.PHONY: help dev prod build-dev build-prod up-dev up-prod down logs clean
+.PHONY: help dev prod build-dev build-prod up-dev up-prod down logs clean backend frontend
 
 # Default target
 help:
 	@echo "Train Builder - Docker Commands"
 	@echo ""
-	@echo "Development:"
-	@echo "  make dev          - Build and run development server (http://localhost:5173)"
-	@echo "  make build-dev    - Build development Docker image"
-	@echo "  make up-dev       - Start development container"
+	@echo "Full Stack:"
+	@echo "  make dev          - Run full stack in development mode"
+	@echo "  make prod         - Run full stack in production mode"
 	@echo ""
-	@echo "Production:"
-	@echo "  make prod         - Build and run production server (http://localhost:8080)"
-	@echo "  make build-prod   - Build production Docker image"
-	@echo "  make up-prod      - Start production container"
+	@echo "Individual Services:"
+	@echo "  make backend      - Run backend only (port 3000)"
+	@echo "  make frontend     - Run frontend only (port 5173)"
+	@echo ""
+	@echo "Building:"
+	@echo "  make build        - Build all images"
+	@echo "  make build-dev    - Build development images"
+	@echo "  make build-prod   - Build production images"
 	@echo ""
 	@echo "General:"
 	@echo "  make down         - Stop all containers"
 	@echo "  make logs         - View logs from all containers"
-	@echo "  make logs-dev     - View development logs"
-	@echo "  make logs-prod    - View production logs"
+	@echo "  make logs-backend - View backend logs"
+	@echo "  make logs-frontend- View frontend logs"
 	@echo "  make clean        - Stop containers and remove volumes"
 	@echo "  make rebuild      - Clean and rebuild everything"
 
-# Development
-dev: build-dev up-dev
+# Development (full stack)
+dev: build-dev
+	docker-compose up backend frontend-dev
 
 build-dev:
-	docker-compose build dev
+	docker-compose build backend frontend-dev
 
-up-dev:
-	docker-compose up dev
-
-# Production
+# Production (full stack)
 prod: build-prod up-prod
 
 build-prod:
-	docker-compose build prod
+	docker-compose build backend frontend-prod
 
 up-prod:
-	docker-compose up -d prod
-	@echo "Production server running at http://localhost:8080"
-	@echo "Run 'make logs-prod' to view logs"
+	docker-compose up -d backend frontend-prod
+	@echo "Backend API running at http://localhost:3000"
+	@echo "Frontend running at http://localhost:8080"
+	@echo "Run 'make logs' to view logs"
+
+# Individual services
+backend:
+	docker-compose up backend
+
+frontend:
+	docker-compose up frontend-dev
 
 # General commands
 down:
