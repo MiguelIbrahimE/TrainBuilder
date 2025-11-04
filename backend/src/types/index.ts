@@ -127,9 +127,9 @@ export interface LoadNetworkResponse {
 
 // Constants
 export const TRACK_COSTS = {
-  hst: 10_000_000, // €10M per km
-  ic: 5_000_000, // €5M per km
-  non_electrified: 2_000_000, // €2M per km
+  hst: 10000000, // €10M per km
+  ic: 5000000, // €5M per km
+  non_electrified: 2000000, // €2M per km
 } as const;
 
 export const TRACK_SPEED_LIMITS = {

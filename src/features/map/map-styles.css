@@ -1,0 +1,26 @@
+/* City label styling */
+.city-label {
+  background: rgba(0, 0, 0, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 4px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+.city-label::before {
+  display: none !important;
+}
+
+/* Leaflet container tweaks */
+.leaflet-container {
+  background: #a8dadc !important; /* Water background */
+}
+
+/* Hide default attribution */
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+}

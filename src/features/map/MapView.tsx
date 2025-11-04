@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
-import { MapContainer, Marker, Polyline, Popup, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useGameStore } from '../../store/gameStore';
 import { TRACK_COLORS, STATION_COLORS } from '../../types';
 import type { Coordinates } from '../../types';
-import { BoundedTileLayer } from './BoundedTileLayer';
 
 // Fix Leaflet default marker icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -58,13 +57,56 @@ function MapBoundsController() {
   return null;
 }
 
-// Map event handler component
+// Helper functions
+const findNearestStation = (coord: Coordinates, stations: any[], maxDistance = 0.02): any => {
+  let nearest = null;
+  let minDistance = Infinity;
+
+  stations.forEach(station => {
+    const distance = Math.sqrt(
+      Math.pow(coord.lat - station.location.lat, 2) + 
+      Math.pow(coord.lon - station.location.lon, 2)
+    );
+    
+    if (distance < minDistance && distance < maxDistance) {
+      minDistance = distance;
+      nearest = station;
+    }
+  });
+
+  return nearest;
+};
+
+const generateStationName = (stationCount: number): string => {
+  const cities = [
+    'Amsterdam', 'Rotterdam', 'Utrecht', 'The Hague', 'Eindhoven', 
+    'Groningen', 'Maastricht', 'Nijmegen', 'Arnhem', 'Breda',
+    'Brussels', 'Antwerp', 'Ghent', 'Bruges', 'Liège',
+    'Cologne', 'Aachen', 'Düsseldorf', 'Lille', 'Luxembourg'
+  ];
+  
+  return stationCount < cities.length 
+    ? cities[stationCount] 
+    : `Station ${stationCount + 1}`;
+};
+
+// Enhanced MapEventHandler with complete construction logic
 function MapEventHandler() {
   const {
     currentTool,
     isDrawingTrack,
+    trackStartNodeId,
+    trackDrawingPoints,
+    addStation,
+    startDrawingTrack,
     addTrackWaypoint,
+    finishDrawingTrack,
+    cancelDrawingTrack,
+    toolSettings,
+    network,
   } = useGameStore();
+
+  const map = useMap();
 
   useMapEvents({
     click: (e) => {
@@ -73,14 +115,103 @@ function MapEventHandler() {
         lon: e.latlng.lng,
       };
 
-      // Handle track drawing waypoints
-      if (currentTool === 'track' && isDrawingTrack) {
-        addTrackWaypoint(coords);
+      switch (currentTool) {
+        case 'station':
+          // Add new station
+          const stationName = generateStationName(network?.stations.length || 0);
+          addStation({
+            name: stationName,
+            location: coords,
+            platforms: toolSettings.platforms,
+            stationType: toolSettings.stationType,
+            facilities: toolSettings.facilities,
+          });
+          break;
+
+        case 'track':
+          if (!isDrawingTrack) {
+            // Start drawing track from nearest station
+            const nearestStation = findNearestStation(coords, network?.stations || []);
+            if (nearestStation) {
+              startDrawingTrack(nearestStation.id, nearestStation.location);
+              addTrackWaypoint(coords); // Add first waypoint
+            }
+          } else {
+            // Continue drawing track
+            addTrackWaypoint(coords);
+          }
+          break;
+
+        case 'crossover':
+          // Add crossover at clicked location
+          const crossoverName = `Junction ${(network?.crossovers.length || 0) + 1}`;
+          useGameStore.getState().addCrossover({
+            id: crypto.randomUUID(),
+            name: crossoverName,
+            location: coords,
+            crossoverType: toolSettings.crossoverType,
+            cost: 0, // Will be calculated in the store
+          });
+          break;
+      }
+    },
+
+    dblclick: (e) => {
+      // Finish track on double click
+      if (currentTool === 'track' && isDrawingTrack && trackDrawingPoints.length > 1) {
+        const coords: Coordinates = {
+          lat: e.latlng.lat,
+          lon: e.latlng.lng,
+        };
+        
+        const nearestStation = findNearestStation(coords, network?.stations || []);
+
+        if (nearestStation && trackStartNodeId) {
+          finishDrawingTrack({
+            trackType: toolSettings.trackType,
+            fromNodeId: trackStartNodeId,
+            toNodeId: nearestStation.id,
+            waypoints: trackDrawingPoints,
+            isDoubleTrack: toolSettings.isDoubleTrack,
+          });
+        } else {
+          // Cancel if no station to connect to
+          cancelDrawingTrack();
+        }
+      }
+    },
+
+    contextmenu: (e) => {
+      // Right-click to cancel drawing
+      if (isDrawingTrack) {
+        cancelDrawingTrack();
+        e.originalEvent.preventDefault();
       }
     },
   });
 
   return null;
+}
+
+// Track drawing visualization
+function TrackDrawingOverlay() {
+  const { isDrawingTrack, trackDrawingPoints } = useGameStore();
+  
+  if (!isDrawingTrack || trackDrawingPoints.length < 2) return null;
+
+  const positions = trackDrawingPoints.map(wp => [wp.lat, wp.lon] as [number, number]);
+
+  return (
+    <Polyline
+      positions={positions}
+      pathOptions={{
+        color: '#00ff00',
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '10, 10',
+      }}
+    />
+  );
 }
 
 export function MapView() {
@@ -109,10 +240,12 @@ export function MapView() {
         ]}
         maxBoundsViscosity={1.0} // Strict - cannot pan outside
       >
-        {/* Bounded tile layer - only loads tiles for selected region */}
-        <BoundedTileLayer
-          region={selectedRegion}
-          tileUrl={import.meta.env.VITE_TILE_URL || 'http://localhost:3000/tiles'}
+        {/* OpenStreetMap tiles - shows roads, buildings, highways */}
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={19}
+          minZoom={6}
         />
 
         {/* Set bounds controller */}
@@ -120,6 +253,9 @@ export function MapView() {
 
         {/* Map event handler */}
         <MapEventHandler />
+
+        {/* Track drawing overlay */}
+        <TrackDrawingOverlay />
 
         {/* Render stations */}
         {network.stations.map((station) => (

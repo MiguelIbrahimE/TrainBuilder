@@ -155,6 +155,46 @@ export interface NetworkStats {
   totalTrackLength: number;
 }
 
+// Grid and simulation types
+export interface GridCell {
+  population: number;
+  hasTrack: boolean;
+  base: {
+    drivers: number;
+    walkers: number;
+    train: number;
+    bike: number;
+  };
+}
+
+export interface Grid {
+  cols: number;
+  rows: number;
+  cells: GridCell[];
+}
+
+// Revenue calculation types
+export interface RevenueCalculation {
+  passengerRevenue: number;
+  cargoRevenue: number;
+  stationRevenue: number;
+  totalRevenue: number;
+}
+
+// Cost constants
+export const TRACK_COSTS = {
+  hst: 10000000, // €10M per km
+  ic: 5000000,   // €5M per km
+  non_electrified: 2000000 // €2M per km
+} as const;
+
+export const STATION_COSTS = {
+  local: 1000000,
+  regional: 2500000,
+  intercity: 5000000,
+  hub: 10000000
+} as const;
+
 // Constants
 export const DEFAULT_MAP_CENTER: Coordinates = {
   lat: 51.9, // Center of Netherlands/Belgium region

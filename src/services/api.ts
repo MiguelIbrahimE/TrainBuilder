@@ -26,24 +26,55 @@ class APIError extends Error {
 }
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new APIError(
-      error.error || `API Error: ${response.statusText}`,
-      response.status,
-      error
-    );
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        
+        // Handle specific error cases
+        if (response.status === 403 && error.error === 'INSUFFICIENT_BUDGET') {
+          throw new APIError(
+            `Insufficient budget! Need €${error.required?.toLocaleString()} but only have €${error.available?.toLocaleString()}`,
+            response.status,
+            error
+          );
+        }
+
+        throw new APIError(
+          error.error || `API Error: ${response.statusText}`,
+          response.status,
+          error
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      lastError = error as Error;
+      
+      // Don't retry on client errors (4xx)
+      if (error instanceof APIError && error.status >= 400 && error.status < 500) {
+        throw error;
+      }
+
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
   }
 
-  return response.json();
+  throw lastError || new Error('API request failed after retries');
 }
 
 export const api = {
@@ -59,19 +90,47 @@ export const api = {
     return fetchAPI<any>(`/network/${id}`, { method: 'GET' });
   },
 
-  addStationToNetwork: async (networkId: string, station: any) => {
-    return fetchAPI<{ station: any; budget: number }>(`/network/${networkId}/stations`, {
-      method: 'POST',
-      body: JSON.stringify(station),
+  addStationToNetwork: async (networkId: string, stationData: any) => {
+    try {
+      return await fetchAPI<{ station: any; budget: number }>(`/network/${networkId}/stations`, {
+        method: 'POST',
+        body: JSON.stringify(stationData),
+      });
+    } catch (error) {
+      if (error instanceof APIError) {
+        throw error; // Re-throw API errors with user-friendly messages
+      }
+      throw new Error('Failed to add station. Please try again.');
+    }
+  },
+
+  addTrackToNetwork: async (networkId: string, trackData: any) => {
+    try {
+      return await fetchAPI<{ track: any; budget: number }>(`/network/${networkId}/tracks`, {
+        method: 'POST',
+        body: JSON.stringify(trackData),
+      });
+    } catch (error) {
+      if (error instanceof APIError) {
+        throw error;
+      }
+      throw new Error('Failed to add track. Please try again.');
+    }
+  },
+
+  // Delete methods
+  removeStation: async (networkId: string, stationId: string) => {
+    return fetchAPI<{ budget: number; refund: number }>(`/network/${networkId}/stations/${stationId}`, {
+      method: 'DELETE',
     });
   },
 
-  addTrackToNetwork: async (networkId: string, track: any) => {
-    return fetchAPI<{ track: any; budget: number }>(`/network/${networkId}/tracks`, {
-      method: 'POST',
-      body: JSON.stringify(track),
+  removeTrack: async (networkId: string, trackId: string) => {
+    return fetchAPI<{ budget: number; refund: number }>(`/network/${networkId}/tracks/${trackId}`, {
+      method: 'DELETE',
     });
   },
+
   /**
    * Calculate distance between two points
    */

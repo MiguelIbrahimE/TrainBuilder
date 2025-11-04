@@ -1,3 +1,11 @@
+/**
+ * LEGACY STORE - DEPRECATED
+ * This old grid-based simulation store is no longer used.
+ * The game now uses useGameStore for railway network management.
+ * 
+ * This file is kept for reference but should be removed in future versions.
+ */
+
 import { create } from 'zustand'
 
 export type Cell = {
@@ -7,19 +15,15 @@ export type Cell = {
   base: { drivers: number; walkers: number; train: number; bike: number } // sums ~1
 }
 
-
 export type Tool = 'track' | 'erase' | 'pan'
 export type Overlay = 'transit' | 'population' | 'work'
-
 
 const COLS = Number(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols') || 80)
 const ROWS = Number(getComputedStyle(document.documentElement).getPropertyValue('--grid-rows') || 50)
 
-
 function seededRandom(seed: number) {
-return () => (seed = (seed * 9301 + 49297) % 233280) / 233280
+  return () => (seed = (seed * 9301 + 49297) % 233280) / 233280
 }
-
 
 function generateGrid(cols = COLS, rows = ROWS) {
   const rand = seededRandom(42)
@@ -55,7 +59,6 @@ function generateGrid(cols = COLS, rows = ROWS) {
   return { cols, rows, cells }
 }
 
-
 export type Grid = ReturnType<typeof generateGrid>
 
 type StoreState = {
@@ -69,6 +72,7 @@ type StoreState = {
   toggleTrackAt: (x: number, y: number, on?: boolean) => void
 }
 
+// DEPRECATED: This store is no longer used in favor of useGameStore
 export const useStore = create<StoreState>((set) => ({
   grid: generateGrid(),
   tool: 'track',
@@ -86,3 +90,6 @@ export const useStore = create<StoreState>((set) => ({
     return { grid: { ...state.grid, cells: newCells } }
   }),
 }))
+
+// Export for backward compatibility - but recommend migrating to useGameStore
+export { useGameStore } from '../store/gameStore'

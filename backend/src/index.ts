@@ -4,6 +4,7 @@ import compression from 'compression';
 import helmet from 'helmet';
 import computationRoutes from './routes/computation.routes';
 import networkRoutes from './routes/network.routes';
+import geodataRoutes from './routes/geodata.routes';
 import path from 'path';
 
 const app = express();
@@ -47,15 +48,16 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: NODE_ENV,
+    version: '1.0.0',
   });
 });
 
 // API routes
 app.use('/api/compute', computationRoutes);
 app.use('/api/network', networkRoutes);
+app.use('/api/geodata', geodataRoutes);
 
 // Static tiles serving with CORS headers
-// Expect tiles to be available under a directory specified by TILE_DIR or default to ../tiles
 const tilesDir = process.env.TILE_DIR || path.join(__dirname, '..', 'tiles');
 
 // Custom middleware for tiles to set CORP headers
@@ -70,11 +72,62 @@ app.use('/tiles', express.static(tilesDir, {
   immutable: true,
 }));
 
+// Serve available regions
+app.get('/api/regions', (req, res) => {
+  res.json({
+    regions: [
+      {
+        id: 'benelux',
+        name: 'Benelux',
+        bounds: [[49.5, 2.5], [53.55, 7.23]],
+        center: { lat: 51.5, lon: 4.9 },
+        zoom: 7,
+        description: 'Netherlands, Belgium, Luxembourg'
+      },
+      {
+        id: 'netherlands',
+        name: 'Netherlands', 
+        bounds: [[50.75, 3.36], [53.55, 7.23]],
+        center: { lat: 52.37, lon: 4.9 },
+        zoom: 8,
+        description: 'Netherlands only'
+      },
+      {
+        id: 'belgium',
+        name: 'Belgium',
+        bounds: [[49.5, 2.5], [51.5, 6.4]],
+        center: { lat: 50.5, lon: 4.5 },
+        zoom: 8,
+        description: 'Belgium only'
+      },
+      {
+        id: 'germany',
+        name: 'Germany',
+        bounds: [[47.3, 5.9], [55.1, 15.0]],
+        center: { lat: 51.2, lon: 10.4 },
+        zoom: 6,
+        description: 'Western Germany'
+      }
+    ]
+  });
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
     error: 'Not Found',
     path: req.path,
+    method: req.method,
+    availableEndpoints: [
+      'GET /health',
+      'GET /api/regions',
+      'POST /api/network/init',
+      'GET /api/network/:id',
+      'POST /api/network/:id/stations',
+      'POST /api/network/:id/tracks',
+      'DELETE /api/network/:id/stations/:stationId',
+      'DELETE /api/network/:id/tracks/:trackId'
+    ]
   });
 });
 
@@ -83,6 +136,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   console.error('Unhandled error:', err);
   res.status(500).json({
     error: NODE_ENV === 'development' ? err.message : 'Internal Server Error',
+    ...(NODE_ENV === 'development' && { stack: err.stack })
   });
 });
 
@@ -99,10 +153,12 @@ app.listen(PORT, () => {
 
 Endpoints:
   GET  /health              - Health check
+  GET  /api/regions         - Available map regions
+  POST /api/network/*       - Network management
   POST /api/compute/*       - Computation APIs
-  GET  /tiles/{z}/{x}/{y}.png - Static map tiles (preloaded)
+  GET  /tiles/{z}/{x}/{y}.png - Static map tiles
 
-Ready to handle requests!
+Ready to build railways! 🚄
   `);
 });
 
