@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y \
     x11vnc \
     xvfb \
     fluxbox \
+    curl \
+    bc \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -24,14 +26,15 @@ WORKDIR /app
 # Copy source files
 COPY . .
 
+# Pre-download OSM tiles during build (cached forever!)
+RUN chmod +x download_tiles.sh && \
+    ./download_tiles.sh || echo "Tile download failed, continuing anyway"
+
 # Create build directory and compile
 RUN mkdir -p build && \
     cd build && \
     cmake .. && \
     make
-
-# Create tiles directory
-RUN mkdir -p /app/build/tiles
 
 # Setup VNC
 RUN mkdir -p ~/.vnc && \

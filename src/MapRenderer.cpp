@@ -8,6 +8,7 @@
 
 MapRenderer::MapRenderer(SDL_Renderer* renderer)
     : renderer(renderer)
+    , currentCountry("default")
 {}
 
 MapRenderer::~MapRenderer() {
@@ -28,10 +29,25 @@ bool MapRenderer::init(double centerLat, double centerLon, int zoom) {
         return false;
     }
 
-    // Create tiles directory
-    system("mkdir -p tiles");
+    // Create data directory
+    system("mkdir -p data");
 
     return true;
+}
+
+void MapRenderer::setCountry(const std::string& countryName) {
+    currentCountry = countryName;
+    // Create country-specific directory
+    std::string cmd = "mkdir -p data/" + currentCountry;
+    system(cmd.c_str());
+
+    // Clear tile cache when switching countries
+    for (auto& pair : tileCache) {
+        if (pair.second) {
+            SDL_DestroyTexture(pair.second);
+        }
+    }
+    tileCache.clear();
 }
 
 void MapRenderer::render(double centerLat, double centerLon, int zoom) {
@@ -130,7 +146,8 @@ void MapRenderer::latLonToTile(double lat, double lon, int zoom, int& tileX, int
 }
 
 std::string MapRenderer::getTilePath(int zoom, int x, int y) {
-    return "tiles/" + std::to_string(zoom) + "_" + std::to_string(x) + "_" + std::to_string(y) + ".png";
+    return "data/" + currentCountry + "/" + std::to_string(zoom) + "_" +
+           std::to_string(x) + "_" + std::to_string(y) + ".png";
 }
 
 std::string MapRenderer::getTileURL(int zoom, int x, int y) {
@@ -145,31 +162,115 @@ static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* use
     return size * nmemb;
 }
 
-void MapRenderer::downloadTile(int zoom, int x, int y) {
+bool MapRenderer::tileExists(int zoom, int x, int y) {
+    std::string path = getTilePath(zoom, x, y);
+    struct stat buffer;
+    return (stat(path.c_str(), &buffer) == 0);
+}
+
+bool MapRenderer::downloadTile(int zoom, int x, int y) {
     std::string url = getTileURL(zoom, x, y);
     std::string path = getTilePath(zoom, x, y);
 
     CURL* curl = curl_easy_init();
-    if (curl) {
-        std::string readBuffer;
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, "TrainBuilder/1.0");
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    if (!curl) {
+        return false;
+    }
 
-        CURLcode res = curl_easy_perform(curl);
-        if (res == CURLE_OK) {
-            // Save to file
-            std::ofstream outFile(path, std::ios::binary);
+    std::string readBuffer;
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "TrainBuilder/1.0");
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+
+    CURLcode res = curl_easy_perform(curl);
+    bool success = false;
+
+    if (res == CURLE_OK) {
+        // Save to file
+        std::ofstream outFile(path, std::ios::binary);
+        if (outFile) {
             outFile.write(readBuffer.c_str(), readBuffer.size());
             outFile.close();
-        } else {
-            std::cerr << "Failed to download tile: " << curl_easy_strerror(res) << std::endl;
+            success = true;
         }
-
-        curl_easy_cleanup(curl);
+    } else {
+        std::cerr << "Failed to download tile " << zoom << "/" << x << "/" << y
+                  << ": " << curl_easy_strerror(res) << std::endl;
     }
+
+    curl_easy_cleanup(curl);
+    return success;
+}
+
+bool MapRenderer::preloadCountryTiles(const std::string& countryCode,
+                                      double minLat, double maxLat,
+                                      double minLon, double maxLon,
+                                      int minZoom, int maxZoom,
+                                      std::function<void(const TileDownloadProgress&)> progressCallback) {
+    std::cout << "Pre-downloading tiles for " << countryCode << std::endl;
+    std::cout << "Zoom levels: " << minZoom << " to " << maxZoom << std::endl;
+
+    // Calculate total number of tiles
+    int totalTiles = 0;
+    for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
+        int minTileX, minTileY, maxTileX, maxTileY;
+        latLonToTile(maxLat, minLon, zoom, minTileX, minTileY);
+        latLonToTile(minLat, maxLon, zoom, maxTileX, maxTileY);
+
+        int tilesX = maxTileX - minTileX + 1;
+        int tilesY = maxTileY - minTileY + 1;
+        totalTiles += tilesX * tilesY;
+    }
+
+    std::cout << "Total tiles to download: " << totalTiles << std::endl;
+
+    int downloadedTiles = 0;
+    TileDownloadProgress progress{totalTiles, 0, false};
+
+    // Download tiles for each zoom level
+    for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
+        int minTileX, minTileY, maxTileX, maxTileY;
+        latLonToTile(maxLat, minLon, zoom, minTileX, minTileY);
+        latLonToTile(minLat, maxLon, zoom, maxTileX, maxTileY);
+
+        std::cout << "Zoom " << zoom << ": tiles " << minTileX << "-" << maxTileX
+                  << ", " << minTileY << "-" << maxTileY << std::endl;
+
+        for (int y = minTileY; y <= maxTileY; y++) {
+            for (int x = minTileX; x <= maxTileX; x++) {
+                // Skip if tile already exists
+                if (!tileExists(zoom, x, y)) {
+                    downloadTile(zoom, x, y);
+                    // Add small delay to respect OSM tile usage policy
+                    SDL_Delay(100);
+                }
+
+                downloadedTiles++;
+                progress.downloadedTiles = downloadedTiles;
+
+                if (progressCallback) {
+                    progressCallback(progress);
+                }
+
+                // Print progress every 10 tiles
+                if (downloadedTiles % 10 == 0) {
+                    std::cout << "Progress: " << downloadedTiles << "/" << totalTiles
+                              << " (" << (100 * downloadedTiles / totalTiles) << "%)" << std::endl;
+                }
+            }
+        }
+    }
+
+    progress.isComplete = true;
+    if (progressCallback) {
+        progressCallback(progress);
+    }
+
+    std::cout << "Tile pre-loading complete!" << std::endl;
+    return true;
 }
 
 SDL_Texture* MapRenderer::getTile(int zoom, int x, int y) {
@@ -183,17 +284,17 @@ SDL_Texture* MapRenderer::getTile(int zoom, int x, int y) {
 
     std::string path = getTilePath(zoom, x, y);
 
+    // NEVER download during rendering - only load existing files
     // Check if file exists
-    struct stat buffer;
-    if (stat(path.c_str(), &buffer) != 0) {
-        // Download tile
-        downloadTile(zoom, x, y);
+    if (!tileExists(zoom, x, y)) {
+        // Return nullptr if tile doesn't exist - no download during render!
+        return nullptr;
     }
 
-    // Load texture
+    // Load texture from disk
     SDL_Surface* surface = IMG_Load(path.c_str());
     if (!surface) {
-        std::cerr << "Failed to load tile: " << path << " - " << IMG_GetError() << std::endl;
+        // Silently fail - don't spam console during render
         return nullptr;
     }
 

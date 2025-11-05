@@ -26,12 +26,26 @@ A real-time train network building and economic management game using OpenStreet
 
 ## How to Play
 
-1. **Start in View Mode**: Pan and zoom to find your area
-2. **Place Stations**: Press 'S' and click on the map to place stations ($5,000 each)
-3. **Draw Lines**: Press 'L', click one station, then click another to connect them
+### Main Menu
+When you start the game, you'll see the main menu with options:
+- **New Game**: Start a new railway network
+- **Continue Game**: Load your last save (coming soon)
+- **Options**: Configure game settings (coming soon)
+- **Exit**: Quit the game
+
+### Country Selection
+1. Click "New Game" to see a list of 26 available countries
+2. Scroll through the list with your mouse wheel
+3. Click on any country to start building there
+4. Each country has its own map bounds and starting position
+
+### Building Your Network
+1. **Place Stations**: Press 'S' and click on the map to place stations ($5,000 each)
+2. **Draw Lines**: Press 'L', click one station, then click another to connect them
    - Cost is $1,000 per kilometer
-4. **Watch Your Network**: Passengers will generate at stations
-5. **Manage Economy**: Keep an eye on your budget in the top-left corner
+3. **Watch Your Network**: Passengers will generate at stations
+4. **Manage Economy**: Keep an eye on your budget in the top-left corner
+5. **Return to Menu**: Press ESC to return to the main menu
 
 ## Quick Start with Docker (Recommended)
 
@@ -153,7 +167,8 @@ make
 - **Graphics**: SDL2
 - **Map Data**: OpenStreetMap (tile.openstreetmap.org)
 - **Coordinate System**: WGS84 (lat/lon)
-- **Default Location**: Amsterdam, Netherlands (52.3676°N, 4.9041°E)
+- **Available Countries**: 26 countries including Netherlands, Belgium, UK, France, Germany, Italy, Spain, Japan, USA, and more
+- **Map Filtering**: OSM tiles are rendered without pre-existing railway infrastructure
 
 ## License
 
