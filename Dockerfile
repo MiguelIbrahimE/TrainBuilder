@@ -1,53 +1,40 @@
-# Development stage
-FROM node:20-alpine AS development
+# Use Ubuntu as base image
+FROM ubuntu:22.04
 
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies
-RUN npm ci
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libsdl2-dev \
+    libsdl2-image-dev \
+    libsdl2-ttf-dev \
+    libcurl4-openssl-dev \
+    libpng-dev \
+    pkg-config \
+    x11-apps \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy application files
-COPY . .
-
-# Expose Vite dev server port
-EXPOSE 5173
-
-# Start development server
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
-
-
-# Build stage
-FROM node:20-alpine AS builder
-
+# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci
-
-# Copy application files
+# Copy source files
 COPY . .
 
-# Build the application
-RUN npm run build
+# Create build directory and compile
+RUN mkdir -p build && \
+    cd build && \
+    cmake .. && \
+    make
 
+# Create tiles directory
+RUN mkdir -p /app/build/tiles
 
-# Production stage
-FROM nginx:alpine AS production
+# Set display environment variable (will be overridden by docker-compose)
+ENV DISPLAY=:0
 
-# Copy built files from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 80
-EXPOSE 80
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Run the game
+WORKDIR /app/build
+CMD ["./TrainBuilder"]

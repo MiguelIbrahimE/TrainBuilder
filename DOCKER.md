@@ -1,206 +1,196 @@
-# Docker Setup for Train Builder
+# Docker Setup Guide
 
-This document explains how to run Train Builder using Docker and Docker Compose.
+This guide explains how to run Train Builder using Docker.
 
-## Prerequisites
+## Why Docker?
 
-- Docker Engine 20.10+
-- Docker Compose 2.0+
+- No need to install SDL2, CMake, or other dependencies
+- Consistent environment across different systems
+- Easy to set up and run
 
-## Quick Start
+## Two Methods Available
 
-### Development Mode (with hot-reloading)
+### Method 1: VNC (Recommended for Beginners)
 
-Run the development server with live code reloading:
+**Pros:**
+- Easiest setup
+- No X11 configuration needed
+- Works on any OS
+- Can connect from web browser
 
-```bash
-docker-compose up dev
-```
+**Cons:**
+- Slightly lower performance
+- Requires VNC client
 
-The application will be available at: **http://localhost:5173**
+**Setup:**
 
-Changes to your source code will automatically reload in the browser.
+1. Make sure Docker is running:
+   ```bash
+   docker --version
+   ```
 
-### Production Mode
+2. Start the game with VNC:
+   ```bash
+   docker-compose -f docker-compose.vnc.yml up --build
+   ```
 
-Build and run the optimized production build:
+3. Connect with VNC:
+   - **macOS**:
+     - Open Finder
+     - Press `Cmd+K`
+     - Enter: `vnc://localhost:5900`
+     - Password: `trainbuilder`
 
-```bash
-docker-compose up prod
-```
+   - **Windows/Linux**:
+     - Download [RealVNC Viewer](https://www.realvnc.com/en/connect/download/viewer/)
+     - Connect to `localhost:5900`
+     - Password: `trainbuilder`
 
-The application will be available at: **http://localhost:8080**
+4. Play the game!
 
-## Detailed Commands
+5. To stop:
+   - Close the VNC window
+   - Press `Ctrl+C` in the terminal
 
-### Build Images
+### Method 2: X11 (Better Performance)
 
-```bash
-# Build development image
-docker-compose build dev
+**Pros:**
+- Better performance
+- Native rendering
+- Lower latency
 
-# Build production image
-docker-compose build prod
+**Cons:**
+- Requires XQuartz on macOS
+- More complex setup
 
-# Build both
-docker-compose build
-```
+**macOS Setup:**
 
-### Run Containers
+1. Install XQuartz:
+   ```bash
+   brew install --cask xquartz
+   ```
 
-```bash
-# Run in foreground (with logs)
-docker-compose up dev
+2. Open XQuartz and configure:
+   - Launch XQuartz from Applications > Utilities
+   - Go to XQuartz > Preferences > Security tab
+   - Enable: "Allow connections from network clients"
+   - Quit and restart XQuartz
 
-# Run in background (detached)
-docker-compose up -d dev
+3. Run the game:
+   ```bash
+   ./run-docker.sh
+   ```
 
-# Stop containers
-docker-compose down
-```
+**Linux Setup:**
 
-### View Logs
-
-```bash
-# View logs for dev service
-docker-compose logs -f dev
-
-# View logs for prod service
-docker-compose logs -f prod
-```
-
-### Clean Up
-
-```bash
-# Stop and remove containers
-docker-compose down
-
-# Remove containers, volumes, and images
-docker-compose down -v --rmi all
-```
-
-## Docker Configuration
-
-### Ports
-
-- **Development**: Port 5173 (Vite dev server)
-- **Production**: Port 8080 (Nginx)
-
-You can change these ports in `docker-compose.yml`:
-
-```yaml
-ports:
-  - "YOUR_PORT:5173"  # for dev
-  - "YOUR_PORT:80"     # for prod
-```
-
-### Environment Variables
-
-Development mode uses `NODE_ENV=development` by default.
-
-You can add more environment variables in `docker-compose.yml`:
-
-```yaml
-environment:
-  - NODE_ENV=development
-  - VITE_API_URL=http://api.example.com
-```
+1. Just run:
+   ```bash
+   ./run-docker.sh
+   ```
 
 ## Troubleshooting
 
-### Port Already in Use
+### VNC Connection Refused
+- Make sure the Docker container is running
+- Check that port 5900 is not already in use:
+  ```bash
+  lsof -i :5900
+  ```
 
-If you see "port is already allocated" error:
+### X11 "Cannot open display"
+- Make sure XQuartz is running
+- Check that you've enabled "Allow connections from network clients"
+- Try restarting XQuartz
+- Run `xhost` to verify your IP is allowed
+
+### Game runs but no map tiles appear
+- The game downloads tiles on first use
+- Check your internet connection
+- Tiles are cached in `./tiles` directory
+- Try zooming in/out or panning the map
+
+### Docker build fails
+- Make sure you have enough disk space
+- Try cleaning Docker cache:
+  ```bash
+  docker system prune -a
+  ```
+
+### Slow performance in VNC
+- This is normal for VNC
+- Try the X11 method instead for better performance
+- Or build natively without Docker
+
+## Advanced Usage
+
+### Using custom map location
+
+Edit `src/Game.cpp` line 17-18 to change the default location:
+
+```cpp
+, mapCenterLat(52.3676)  // Your latitude
+, mapCenterLon(4.9041)   // Your longitude
+```
+
+Then rebuild:
+```bash
+docker-compose -f docker-compose.vnc.yml up --build
+```
+
+### Persisting game data
+
+Map tiles are automatically persisted in the `./tiles` directory. This means:
+- Tiles are only downloaded once
+- Faster startup after first run
+- Can be shared between native and Docker builds
+
+### Viewing logs
 
 ```bash
-# Stop existing containers
-docker-compose down
+# Follow logs in real-time
+docker-compose -f docker-compose.vnc.yml logs -f
 
-# Or change the port in docker-compose.yml
+# View container status
+docker ps
+
+# Access container shell (while running)
+docker exec -it trainbuilder-game-vnc /bin/bash
 ```
 
-### Rebuild After Code Changes (Production)
-
-Production builds are static. After code changes:
+### Stopping the game
 
 ```bash
-docker-compose down
-docker-compose build prod
-docker-compose up prod
+# Stop containers
+docker-compose -f docker-compose.vnc.yml down
+
+# Stop and remove volumes
+docker-compose -f docker-compose.vnc.yml down -v
 ```
 
-### Permission Issues
+## File Structure
 
-If you encounter permission issues with volumes:
-
-```bash
-# Fix ownership
-docker-compose down
-sudo chown -R $USER:$USER .
-docker-compose up dev
+```
+TrainBuilder/
+├── Dockerfile              # X11 version
+├── Dockerfile.vnc          # VNC version (easier)
+├── docker-compose.yml      # X11 compose file
+├── docker-compose.vnc.yml  # VNC compose file
+├── run-docker.sh           # Helper script for X11
+└── tiles/                  # Downloaded map tiles (auto-created)
 ```
 
-### Clear Docker Cache
+## Performance Comparison
 
-If builds are failing:
+| Method | Startup Time | FPS | Ease of Setup |
+|--------|-------------|-----|---------------|
+| Native | Fast | 60+ | Medium |
+| Docker X11 | Medium | 50-60 | Hard (macOS) |
+| Docker VNC | Medium | 30-40 | Easy |
 
-```bash
-# Remove all containers, images, and volumes
-docker-compose down -v
-docker system prune -a
+## Next Steps
 
-# Rebuild
-docker-compose build --no-cache
-```
-
-## Architecture
-
-### Multi-Stage Dockerfile
-
-The Dockerfile uses multi-stage builds:
-
-1. **Development**: Node.js with Vite dev server
-2. **Builder**: Compiles TypeScript and builds optimized bundle
-3. **Production**: Nginx serving static files
-
-### Volume Mounting (Development)
-
-Development mode mounts your local directory for hot-reloading:
-
-```yaml
-volumes:
-  - .:/app              # Mount source code
-  - /app/node_modules   # Prevent overwriting node_modules
-```
-
-## Health Checks
-
-Production nginx includes a health check endpoint:
-
-```bash
-curl http://localhost:8080/health
-# Output: healthy
-```
-
-## Performance Tips
-
-1. **Use production mode** for deployment
-2. **Development mode** is optimized for rapid iteration
-3. **nginx.conf** includes gzip compression and caching headers
-4. Static assets are cached for 1 year in production
-
-## CI/CD Integration
-
-Example GitHub Actions workflow:
-
-```yaml
-name: Build Docker Image
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Build production image
-        run: docker-compose build prod
-```
+Once the game is running, check out the main [README.md](README.md) for:
+- Game controls
+- How to play
+- Game mechanics
+- Building from source

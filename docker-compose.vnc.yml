@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  trainbuilder-vnc:
+    build:
+      context: .
+      dockerfile: Dockerfile.vnc
+    container_name: trainbuilder-game-vnc
+    ports:
+      - "5900:5900"
+    volumes:
+      # Persist downloaded map tiles
+      - ./tiles:/app/build/tiles
+    stdin_open: true
+    tty: true
+    environment:
+      - DISPLAY=:0

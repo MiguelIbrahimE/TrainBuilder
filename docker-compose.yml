@@ -1,81 +1,17 @@
+version: '3.8'
+
 services:
-  # Backend API (computation service)
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: development
-    container_name: trainbuilder-backend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./backend:/app
-      - ./backend/tiles:/app/tiles
-      - /app/node_modules
+  trainbuilder:
+    build: .
+    container_name: trainbuilder-game
     environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - CORS_ORIGIN=http://localhost:5173
-      - TILE_DIR=/app/tiles
-    restart: unless-stopped
-
-  tiles-prefetch:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: development
-    container_name: trainbuilder-tiles-prefetch
-    command: ["npm", "run", "fetch:tiles"]
+      - DISPLAY=${DISPLAY}
     volumes:
-      - ./backend:/app
-      - ./backend/tiles:/app/tiles
-      - /app/node_modules
-    environment:
-      - TILE_DIR=/app/tiles
-      - TILE_REGIONS=belgium,netherlands
-      - TILE_MIN_Z=6
-      - TILE_MAX_Z=12
-    restart: "no"
-
-  # Frontend Development
-  frontend-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
-    container_name: trainbuilder-frontend-dev
-    ports:
-      - "5173:5173"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - VITE_API_URL=http://localhost:3000/api
-      - VITE_TILE_URL=http://localhost:3000/tiles
-    depends_on:
-      - tiles-prefetch
-      - backend
+      # Mount X11 socket for display
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Persist downloaded map tiles
+      - ./tiles:/app/build/tiles
+    network_mode: host
     stdin_open: true
     tty: true
-
-  # Frontend Production
-  frontend-prod:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    container_name: trainbuilder-frontend-prod
-    ports:
-      - "8080:80"
-    environment:
-      - VITE_API_URL=http://backend:3000/api
-      - VITE_TILE_URL=http://backend:3000/tiles
-    depends_on:
-      - tiles-prefetch
-      - backend
-    restart: unless-stopped
-
-networks:
-  default:
-    name: train-builder-network
+    privileged: true
